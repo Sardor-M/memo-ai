@@ -19,7 +19,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
 
+  // Recording widget control functions
+  minimizeRecordingWidget: () => ipcRenderer.invoke('minimize-recording-widget'),
+  closeRecordingWidget: () => ipcRenderer.invoke('close-recording-widget'),
+
   // Utility functions
   getRecordings: () => ipcRenderer.invoke('get-recordings'),
   getAppPath: () => ipcRenderer.invoke('get-app-path'),
+
+  // Widget state sync
+  onRecordingStateChange: (callback: (state: any) => void) => {
+    ipcRenderer.on('recording-state-changed', (_event, state) => callback(state));
+  },
 });

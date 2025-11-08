@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Play, Trash2 } from 'lucide-react';
 
-interface Recording {
+type Recording = {
   id: string;
   name: string;
   date: string;
   duration: string;
   transcript?: string;
+  size: string;
 }
 
 export default function Home() {

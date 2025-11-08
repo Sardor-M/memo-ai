@@ -3,8 +3,9 @@ import ReactDOM from 'react-dom/client';
 import { HashRouter as Router, useRoutes, useLocation } from 'react-router-dom';
 import { routes } from './routes/routes';
 import Sidebar from './components/Sidebar/Sidebar';
+import TitleBar from './components/TitleBar/TitleBar';
+import Toolbar from './components/Toolbar/Toolbar';
 import './App.css';
-import WindowControls from './components/WindowControls/WindowControls';
 
 function AppContent() {
   const location = useLocation();
@@ -24,7 +25,10 @@ function AppContent() {
   return (
     <div className="flex flex-col h-screen">
       {/* Title Bar with Window Controls */}
-      {!isWidget && <WindowControls />}
+      {!isWidget && <TitleBar />}
+      
+      {/* Toolbar with Recording Icon */}
+      {!isWidget && <Toolbar />}
       
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">

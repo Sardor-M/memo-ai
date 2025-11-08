@@ -3,10 +3,12 @@ import path from 'path';
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
+let recordingWidgetWindow: BrowserWindow | null = null;
 
 // Declare Vite dev server URL
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
+declare const MAIN_WINDOW_VITE_PRELOAD_URL: string;
 
 // Request permissions for macOS
 async function requestPermissions() {
@@ -95,6 +97,54 @@ function createWidgetWindow() {
   });
 }
 
+// Create separate recording widget window
+function createRecordingWidgetWindow() {
+  if (recordingWidgetWindow) {
+    recordingWidgetWindow.focus();
+    return;
+  }
+
+  recordingWidgetWindow = new BrowserWindow({
+    width: 380,
+    height: 500,
+    frame: false,
+    transparent: false,
+    backgroundColor: '#111827',
+    alwaysOnTop: true,
+    resizable: true,
+    skipTaskbar: true,
+    hasShadow: true,
+    movable: true,
+    minimizable: true,
+    closable: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+    titleBarStyle: 'hidden',
+  });
+
+  // Load recording widget
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    recordingWidgetWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}recording-widget.html`);
+    recordingWidgetWindow.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    recordingWidgetWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/recording-widget.html`));
+  }
+
+  // Position in bottom-right corner
+  const { screen } = require('electron');
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+  
+  recordingWidgetWindow.setPosition(width - 400, height - 520);
+
+  recordingWidgetWindow.on('closed', () => {
+    recordingWidgetWindow = null;
+  });
+}
+
 // App lifecycle
 app.whenReady().then(async () => {
   await requestPermissions();
@@ -143,9 +193,18 @@ ipcMain.handle('get-app-path', () => {
   return app.getPath('userData');
 });
 
-// Placeholder handlers - will implement later
+// Recording handlers with widget sync
 ipcMain.handle('start-recording', async () => {
   console.log('Start recording called');
+  
+  // Create and show recording widget window
+  createRecordingWidgetWindow();
+  
+  // Notify widget of recording start
+  if (recordingWidgetWindow) {
+    recordingWidgetWindow.webContents.send('recording-state-changed', { isRecording: true });
+  }
+  
   return { success: true, recordingId: Date.now().toString() };
 });
 
@@ -189,5 +248,26 @@ ipcMain.handle('maximize-window', () => {
 ipcMain.handle('close-window', () => {
   if (mainWindow) {
     mainWindow.close();
+  }
+});
+
+// Recording widget IPC handlers
+ipcMain.handle('minimize-recording-widget', () => {
+  if (recordingWidgetWindow) {
+    recordingWidgetWindow.minimize();
+  }
+});
+
+ipcMain.handle('close-recording-widget', () => {
+  if (recordingWidgetWindow) {
+    recordingWidgetWindow.close();
+    recordingWidgetWindow = null;
+  }
+});
+
+// Sync recording state with widget
+ipcMain.on('recording-state-updated', (event, state) => {
+  if (recordingWidgetWindow) {
+    recordingWidgetWindow.webContents.send('recording-state-changed', state);
   }
 });

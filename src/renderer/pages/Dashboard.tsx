@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
+import { Mic, Video, Plus } from 'lucide-react';
+import { useDeviceDetection } from '../hooks/useDeviceDetection';
 
 export default function Dashboard() {
   const [recordings, setRecordings] = useState<any[]>([]);
+  const { isRecording, isMicrophoneActive, isCameraActive, startRecording, stopRecording } = useDeviceDetection();
 
   useEffect(() => {
     loadRecordings();
@@ -9,62 +12,125 @@ export default function Dashboard() {
 
   const loadRecordings = async () => {
     try {
-      const data = await window.electronAPI.getRecordings();
-      setRecordings(data);
+      const data = await window.electronAPI?.getRecordings?.();
+      setRecordings(data || []);
     } catch (error) {
       console.error('Failed to load recordings:', error);
     }
   };
 
-  const handleShowWidget = async () => {
-    await window.electronAPI.showWidget();
+  const handleStartRecording = async () => {
+    await startRecording();
+    setShowActiveWidget(true);
+  };
+
+  const handleStopRecording = async () => {
+    await stopRecording();
+    setShowActiveWidget(false);
+    loadRecordings();
   };
 
   return (
-    <div style={{ padding: '40px', background: '#f5f5f7', minHeight: '100vh' }}>
-      <header style={{ 
-        background: 'white', 
-        padding: '20px 40px', 
-        borderRadius: '16px',
-        marginBottom: '40px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <h1 style={{ margin: 0 }}>🎙️ MeetingMind Desktop</h1>
-        <button 
-          onClick={handleShowWidget}
-          style={{
-            background: '#007aff',
-            color: 'white',
-            border: 'none',
-            padding: '12px 24px',
-            borderRadius: '10px',
-            fontSize: '15px',
-            fontWeight: '600',
-            cursor: 'pointer'
-          }}
-        >
-          Open Recording Widget
-        </button>
-      </header>
+    <div className="flex-1 flex flex-col bg-white overflow-hidden">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 p-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-600 mt-1">Welcome to Memo-AI</p>
+          </div>
+          <button
+            onClick={handleStartRecording}
+            disabled={isRecording}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-6 rounded-lg transition"
+          >
+            <Plus size={20} />
+            New Recording
+          </button>
+        </div>
+      </div>
 
-      <main>
-        <h2>Analytics</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '40px' }}>
-          <div style={{ background: 'white', padding: '30px', borderRadius: '16px' }}>
-            <h3 style={{ fontSize: '42px', color: '#007aff', margin: '0 0 8px 0' }}>{recordings.length}</h3>
-            <p style={{ margin: 0, color: '#86868b' }}>Total Recordings</p>
+      {/* Main Content */}
+      <div className="flex-1 overflow-auto p-6">
+        {/* Status Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          {/* Microphone Status */}
+          <div className={`p-6 rounded-lg border-2 transition ${
+            isMicrophoneActive 
+              ? 'bg-green-50 border-green-200' 
+              : 'bg-gray-50 border-gray-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              <Mic size={24} className={isMicrophoneActive ? 'text-green-600' : 'text-gray-400'} />
+              <div>
+                <p className="text-sm text-gray-600">Microphone</p>
+                <p className={`font-semibold ${isMicrophoneActive ? 'text-green-600' : 'text-gray-900'}`}>
+                  {isMicrophoneActive ? 'Active' : 'Ready'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Camera Status */}
+          <div className={`p-6 rounded-lg border-2 transition ${
+            isCameraActive 
+              ? 'bg-blue-50 border-blue-200' 
+              : 'bg-gray-50 border-gray-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              <Video size={24} className={isCameraActive ? 'text-blue-600' : 'text-gray-400'} />
+              <div>
+                <p className="text-sm text-gray-600">Camera</p>
+                <p className={`font-semibold ${isCameraActive ? 'text-blue-600' : 'text-gray-900'}`}>
+                  {isCameraActive ? 'Active' : 'Ready'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Recording Status */}
+          <div className={`p-6 rounded-lg border-2 transition ${
+            isRecording 
+              ? 'bg-red-50 border-red-200' 
+              : 'bg-gray-50 border-gray-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-4 h-4 rounded-full ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-gray-400'}`} />
+              <div>
+                <p className="text-sm text-gray-600">Recording</p>
+                <p className={`font-semibold ${isRecording ? 'text-red-600' : 'text-gray-900'}`}>
+                  {isRecording ? 'In Progress' : 'Idle'}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
-        <h2>Recent Recordings</h2>
-        <div style={{ background: 'white', padding: '60px', borderRadius: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '64px' }}>🎤</div>
-          <h3>No recordings yet</h3>
-          <p style={{ color: '#86868b' }}>Click "Open Recording Widget" to start!</p>
+        {/* Recent Recordings */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-bold text-gray-900">Recent Recordings</h2>
+          </div>
+
+          {recordings.length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="text-5xl mb-4">🎤</div>
+              <h3 className="text-lg font-semibold text-gray-900">No recordings yet</h3>
+              <p className="text-gray-600 mt-2">Start a new recording to begin capturing your meetings</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {recordings.map((recording, idx) => (
+                <div key={idx} className="p-4 hover:bg-gray-50 transition">
+                  <h3 className="font-semibold text-gray-900">{recording.name}</h3>
+                  <p className="text-sm text-gray-600 mt-1">{recording.date}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      </main>
+      </div>
+
     </div>
   );
 }
