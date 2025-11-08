@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Volume2, VideoIcon, Zap, X, Pause, Play, Save, Mic } from 'lucide-react';
+import { Volume2, X, Pause, Play, Save, Mic, AlertCircle } from 'lucide-react';
+import { useAssemblyAI } from '../hooks/useAssemblyAI';
+
+const ASSEMBLY_AI_KEY = import.meta.env.VITE_ASSEMBLY_AI_KEY || '';
 
 export default function RecordingWidget() {
   const [duration, setDuration] = useState(0);
@@ -7,13 +10,27 @@ export default function RecordingWidget() {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [notes, setNotes] = useState('');
-  const [transcript, setTranscript] = useState('');
   const [waveformBars, setWaveformBars] = useState(Array(60).fill(0));
   const [isSaving, setIsSaving] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
 
+  // AssemblyAI Integration
+  const {
+    isConnected: isAIConnected,
+    transcript,
+    error: aiError,
+    connect: connectAI,
+    disconnect: disconnectAI,
+    clearTranscript: clearAITranscript,
+    clearError: clearAIError,
+  } = useAssemblyAI({
+    apiKey: ASSEMBLY_AI_KEY,
+    onTranscript: (text) => console.log('Transcript:', text),
+    onError: (error) => console.error('AI Error:', error),
+    onConnectionChange: (connected) => console.log('Connected:', connected),
+  });
+
   useEffect(() => {
-    // Listen for recording state changes from main process
     window.electronAPI?.onRecordingStateChange?.((state: any) => {
       console.log('Recording state changed:', state);
       setIsRecording(state.isRecording);
@@ -24,7 +41,6 @@ export default function RecordingWidget() {
     });
   }, []);
 
-  // Fast waveform animation (updates every 50ms for smooth movement)
   useEffect(() => {
     if (!isRecording || isPaused) return;
 
@@ -43,20 +59,16 @@ export default function RecordingWidget() {
     return () => clearInterval(waveInterval);
   }, [isRecording, isPaused]);
 
-  // Duration and transcript update every 1 second
+  // Duration update every 1 second
   useEffect(() => {
     if (!isRecording || isPaused) return;
 
     const interval = setInterval(() => {
       setDuration(prev => prev + 1);
-      // Simulate LLM-generated transcript
-      if (transcript.length < 500) {
-        setTranscript(prev => prev + (Math.random() > 0.5 ? ' ' + Math.random().toString(36).substring(7) : ''));
-      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRecording, isPaused, transcript]);
+  }, [isRecording, isPaused]);
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -67,10 +79,12 @@ export default function RecordingWidget() {
 
   const handleStart = async () => {
     try {
-      console.log('🎙️ Starting recording...');
+      clearAITranscript();
+      clearAIError();
+      
+      await connectAI();
       await window.electronAPI?.startRecording?.();
       setIsRecording(true);
-      setTranscript('Recording started...\n');
       setNotes('');
     } catch (error) {
       console.error('Failed to start recording:', error);
@@ -79,7 +93,8 @@ export default function RecordingWidget() {
 
   const handleStop = async () => {
     try {
-      console.log('⏹️ Stopping recording...');
+      disconnectAI();
+      
       await window.electronAPI?.stopRecording?.();
       setIsRecording(false);
       setIsPaused(false);
@@ -95,19 +110,20 @@ export default function RecordingWidget() {
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      console.log('💾 Saving transcript and notes...');
       
       const timestamp = new Date().toLocaleString();
       const content = `=== Memo-AI Recording ===\nDate: ${timestamp}\nDuration: ${formatTime(duration)}\n\n--- Transcript ---\n${transcript}\n\n--- Notes ---\n${notes}`;
       
-      // Save to macOS local machine using IPC
-      const result = await window.electronAPI?.saveToDocx?.(content, `memo-${Date.now()}.txt`);
-      console.log('✅ Saved:', result);
+      await window.electronAPI?.saveToDocx?.(content, `memo-${Date.now()}.txt`);
       
-      alert('✅ Recording saved successfully!');
+      clearAITranscript();
+      setNotes('');
+      setDuration(0);
+      
+      alert('Recording saved successfully!');
     } catch (error) {
       console.error('Failed to save:', error);
-      alert('❌ Failed to save recording');
+      alert('Failed to save recording');
     } finally {
       setIsSaving(false);
     }
@@ -207,11 +223,31 @@ export default function RecordingWidget() {
                 </div>
               )}
 
+              {/* Error Display */}
+              {aiError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex gap-2 items-start">
+                  <AlertCircle size={16} className="text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-red-700 text-xs">{aiError}</p>
+                </div>
+              )}
+
               {/* Transcript Display */}
               <div className="bg-gray-50 rounded-lg p-3 border border-gray-300 flex-1 overflow-y-auto max-h-full">
-                <p className="text-black text-xs leading-relaxed whitespace-pre-wrap">
-                  {transcript || '🎙️ Recording started - transcript will appear here...'}
-                </p>
+                <div className="text-black text-xs leading-relaxed whitespace-pre-wrap">
+                  {transcript ? (
+                    <span>{transcript}</span>
+                  ) : (
+                    <span className="text-gray-500">🎙️ Recording started - transcript will appear here...</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Connection Status */}
+              <div className="flex items-center gap-2 text-xs pt-2">
+                <div className={`w-2 h-2 rounded-full ${isAIConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+                <span className={isAIConnected ? 'text-green-600' : 'text-gray-600'}>
+                  {isAIConnected ? 'Speech-to-text active' : 'Preparing speech-to-text...'}
+                </span>
               </div>
             </div>
           )}

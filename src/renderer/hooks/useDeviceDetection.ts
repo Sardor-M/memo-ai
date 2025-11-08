@@ -81,7 +81,6 @@ export function useDeviceDetection() {
     // Request microphone access (triggers system prompt)
     const requestAudioAccess = async () => {
       try {
-        console.log('🎤 Requesting microphone access...');
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
         console.log('✅ Microphone access granted');
@@ -91,7 +90,6 @@ export function useDeviceDetection() {
           isMicrophoneActive: true,
         }));
       } catch (error) {
-        console.log('❌ Microphone access denied:', error);
         setDeviceState(prev => ({
           ...prev,
           microphonePermission: 'denied',
@@ -105,14 +103,12 @@ export function useDeviceDetection() {
         console.log('📹 Requesting camera access...');
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         stream.getTracks().forEach(track => track.stop());
-        console.log('✅ Camera access granted');
         setDeviceState(prev => ({
           ...prev,
           cameraPermission: 'granted',
           isCameraActive: true,
         }));
       } catch (error) {
-        console.log('❌ Camera access denied:', error);
         setDeviceState(prev => ({
           ...prev,
           cameraPermission: 'denied',
