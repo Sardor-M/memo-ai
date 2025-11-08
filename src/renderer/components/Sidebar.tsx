@@ -10,7 +10,7 @@ export default function Sidebar() {
 
   const navItems = [
     { path: '/', label: 'Home', icon: Home },
-    { path: '/analytics', label: 'Analytics', icon: BarChart3 },
+   // { path: '/analytics', label: 'Analytics', icon: BarChart3 },
     { path: '/settings', label: 'Settings', icon: Settings },
   ];
 
