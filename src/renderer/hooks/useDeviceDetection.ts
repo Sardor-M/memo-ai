@@ -8,6 +8,24 @@ type DeviceState = {
   cameraPermission: 'granted' | 'denied' | 'prompt' | 'unknown';
  }
 
+const getInitialAutoStart = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    const saved = localStorage.getItem('memoai-settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return Boolean(parsed.autoStartRecording);
+    }
+  } catch (error) {
+    console.warn('Could not read saved settings for auto-start:', error);
+  }
+
+  return false;
+};
+
 export function useDeviceDetection() {
   const [deviceState, setDeviceState] = useState<DeviceState>({
     isMicrophoneActive: false,
@@ -17,7 +35,75 @@ export function useDeviceDetection() {
     cameraPermission: 'unknown',
   });
 
-  const [autoStartEnabled, setAutoStartEnabled] = useState(true);
+  const [autoStartEnabled, setAutoStartEnabledState] = useState<boolean>(getInitialAutoStart);
+
+  const persistAutoStart = (nextValue: boolean) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const saved = localStorage.getItem('memoai-settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        parsed.autoStartRecording = nextValue;
+        localStorage.setItem('memoai-settings', JSON.stringify(parsed));
+      } else {
+        localStorage.setItem(
+          'memoai-settings',
+          JSON.stringify({ autoStartRecording: nextValue })
+        );
+      }
+    } catch (error) {
+      console.warn('Could not persist auto-start setting:', error);
+    }
+  };
+
+  const setAutoStartEnabled = (value: boolean | ((prev: boolean) => boolean)) => {
+    setAutoStartEnabledState(prev => {
+      const nextValue = typeof value === 'function' ? value(prev) : value;
+      persistAutoStart(nextValue);
+      return nextValue;
+    });
+  };
+
+  const requestAudioAccess = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      console.log('✅ Microphone access granted');
+      setDeviceState(prev => ({
+        ...prev,
+        microphonePermission: 'granted',
+        isMicrophoneActive: true,
+      }));
+    } catch (error) {
+      setDeviceState(prev => ({
+        ...prev,
+        microphonePermission: 'denied',
+      }));
+      throw error;
+    }
+  };
+
+  const requestVideoAccess = async () => {
+    try {
+      console.log('📹 Requesting camera access...');
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      setDeviceState(prev => ({
+        ...prev,
+        cameraPermission: 'granted',
+        isCameraActive: true,
+      }));
+    } catch (error) {
+      setDeviceState(prev => ({
+        ...prev,
+        cameraPermission: 'denied',
+      }));
+      throw error;
+    }
+  };
 
   useEffect(() => {
     // Listen for recording start from main process
@@ -78,45 +164,6 @@ export function useDeviceDetection() {
       }
     };
 
-    // Request microphone access (triggers system prompt)
-    const requestAudioAccess = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-        console.log('✅ Microphone access granted');
-        setDeviceState(prev => ({
-          ...prev,
-          microphonePermission: 'granted',
-          isMicrophoneActive: true,
-        }));
-      } catch (error) {
-        setDeviceState(prev => ({
-          ...prev,
-          microphonePermission: 'denied',
-        }));
-      }
-    };
-
-    // Request camera access (triggers system prompt)
-    const requestVideoAccess = async () => {
-      try {
-        console.log('📹 Requesting camera access...');
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        stream.getTracks().forEach(track => track.stop());
-        setDeviceState(prev => ({
-          ...prev,
-          cameraPermission: 'granted',
-          isCameraActive: true,
-        }));
-      } catch (error) {
-        setDeviceState(prev => ({
-          ...prev,
-          cameraPermission: 'denied',
-        }));
-      }
-    };
-
-    // Check if devices are available
     const checkDevices = async () => {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -132,9 +179,7 @@ export function useDeviceDetection() {
             isCameraActive: hasCamera,
           }));
 
-          // Auto-start recording if enabled
           if (autoStartEnabled && !deviceState.isRecording && (hasMicrophone || hasCamera)) {
-            console.log('🚀 Auto-starting recording...');
             setTimeout(() => startRecording(), 300);
           }
         }

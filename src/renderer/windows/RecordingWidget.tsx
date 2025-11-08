@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Volume2, X, Pause, Play, Save, Mic, AlertCircle } from 'lucide-react';
+import { Volume2, Pause, Play, Save, Mic, AlertCircle } from 'lucide-react';
 import { useAssemblyAI } from '../hooks/useAssemblyAI';
 
-const ASSEMBLY_AI_KEY = import.meta.env.VITE_ASSEMBLY_AI_KEY || '';
+const ASSEMBLY_AI_KEY = import.meta.env.VITE_ASSEMBLY_AI_KEY || 'a483a32d28e34ffa8ffc44bac0e13362';
 
 export default function RecordingWidget() {
   const [duration, setDuration] = useState(0);
@@ -14,7 +14,6 @@ export default function RecordingWidget() {
   const [isSaving, setIsSaving] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
 
-  // AssemblyAI Integration
   const {
     isConnected: isAIConnected,
     transcript,
@@ -54,7 +53,7 @@ export default function RecordingWidget() {
         newBars.push(newHeight);
         return newBars;
       });
-    }, 50); // Update every 50ms for smooth animation
+    }, 40); 
 
     return () => clearInterval(waveInterval);
   }, [isRecording, isPaused]);
@@ -129,46 +128,27 @@ export default function RecordingWidget() {
     }
   };
 
-  const handleClose = async () => {
-    try {
-      await window.electronAPI?.closeRecordingWidget?.();
-    } catch (error) {
-      console.error('Failed to close widget:', error);
-    }
-  };
-
   return (
     <div 
       ref={dragRef}
-      className="w-full h-full bg-white flex flex-col overflow-hidden select-none shadow-2xl rounded-lg border border-gray-200"
+      className="w-full h-full bg-gray-100 flex flex-col overflow-hidden select-none shadow-2xl rounded-lg border border-gray-200"
     >
       {/* Header - DRAGGABLE */}
       <div 
-        className="flex items-center justify-between p-4 bg-white border-b border-gray-200" 
+        className="flex items-center justify-between p-4 bg-black border-b border-gray-900/60"
         style={{ WebkitAppRegion: 'drag' } as any}
       >
         <div className="flex items-center gap-2">
-          <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} />
-          <div>
-            <h2 className="text-sm font-bold text-black">Memo-AI</h2>
-            <p className={`text-xs font-mono ${isRecording ? 'text-red-500' : 'text-gray-500'}`}>
-              {formatTime(duration)}
-            </p>
-          </div>
+          <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`} />
+          <h2 className="text-sm font-bold text-white">Memo-AI</h2>
         </div>
-
-        <button
-          onClick={handleClose}
-          className="p-2 hover:bg-gray-100 rounded-lg transition text-gray-600 hover:text-red-500 cursor-pointer"
-          style={{ WebkitAppRegion: 'no-drag' } as any}
-        >
-          <X size={16} />
-        </button>
+        <div className="px-1" />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 p-3 border-b border-gray-200 bg-gray-50">
-        <button
+      <div className="flex items-center justify-between gap-4 p-3 border-b border-gray-200 bg-gray-100">
+        <div className="flex gap-2">
+          <button
           onClick={() => setActiveTab('notes')}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-md font-medium text-xs transition cursor-pointer ${
             activeTab === 'notes'
@@ -178,8 +158,8 @@ export default function RecordingWidget() {
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
           📝 Notes
-        </button>
-        <button
+          </button>
+          <button
           onClick={() => setActiveTab('transcript')}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-md font-medium text-xs transition cursor-pointer ${
             activeTab === 'transcript'
@@ -189,12 +169,25 @@ export default function RecordingWidget() {
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
           🎙️ Transcript
-        </button>
+          </button>
+        </div>
+        <div className="flex items-center gap-3 text-xs" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div className="flex items-center gap-2 px-2 py-1 rounded-md border border-gray-300 bg-white text-gray-700">
+            <span className="text-gray-500">⏱</span>
+            <span className="font-mono text-gray-800">{formatTime(duration)}</span>
+          </div>
+          <div className={`flex items-center gap-2 px-2 py-1 rounded-md border ${isAIConnected ? 'border-green-300 bg-green-50 text-green-600' : 'border-gray-300 bg-white text-gray-600'}`}>
+            <span className={`w-2 h-2 rounded-full ${isAIConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span className="font-medium">
+              {isAIConnected ? 'Transcripting...' : 'Connecting...'}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        <div className="flex-1 overflow-y-auto p-4 bg-white">
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-100">
           {activeTab === 'notes' ? (
             <textarea
               value={notes}
@@ -207,7 +200,7 @@ export default function RecordingWidget() {
             <div className="space-y-3">
               {/* Waveform - Fast dynamic animation */}
               {isRecording && (
-                <div className="flex items-end justify-center gap-0.5 h-12 bg-gray-100 rounded-lg p-2 border border-gray-300 overflow-hidden">
+                <div className="flex items-end justify-center gap-0.5 h-12 bg-white rounded-lg p-2 border border-gray-200 overflow-hidden">
                   {waveformBars.map((height, i) => (
                     <div
                       key={i}
@@ -232,7 +225,7 @@ export default function RecordingWidget() {
               )}
 
               {/* Transcript Display */}
-              <div className="bg-gray-50 rounded-lg p-3 border border-gray-300 flex-1 overflow-y-auto max-h-full">
+              <div className="bg-white rounded-lg p-3 border border-gray-200 flex-1 overflow-y-auto max-h-full">
                 <div className="text-black text-xs leading-relaxed whitespace-pre-wrap">
                   {transcript ? (
                     <span>{transcript}</span>
@@ -241,20 +234,12 @@ export default function RecordingWidget() {
                   )}
                 </div>
               </div>
-
-              {/* Connection Status */}
-              <div className="flex items-center gap-2 text-xs pt-2">
-                <div className={`w-2 h-2 rounded-full ${isAIConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
-                <span className={isAIConnected ? 'text-green-600' : 'text-gray-600'}>
-                  {isAIConnected ? 'Speech-to-text active' : 'Preparing speech-to-text...'}
-                </span>
-              </div>
             </div>
           )}
         </div>
 
         {/* Status */}
-        <div className="p-3 border-t border-gray-200 bg-gray-50 flex justify-between items-center text-xs">
+        <div className="p-3 border-t border-gray-200 bg-gray-100 flex justify-between items-center text-xs">
           <div className="flex gap-4">
             <div className="flex items-center gap-2">
               <Volume2 size={14} className={isRecording ? 'text-red-500 animate-pulse' : 'text-gray-400'} />
@@ -270,7 +255,7 @@ export default function RecordingWidget() {
       </div>
 
       {/* Controls Footer */}
-      <div className="flex items-center justify-between p-3 border-t border-gray-200 bg-gray-50" style={{ WebkitAppRegion: 'no-drag' } as any}>
+      <div className="flex items-center justify-between p-3 border-t border-gray-200 bg-gray-100" style={{ WebkitAppRegion: 'no-drag' } as any}>
         <div className="flex gap-2">
           {!isRecording ? (
             <button

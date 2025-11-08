@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+const normalizeText = (value: string) => value.replace(/\s+/g, ' ').trim();
+
 type UseAssemblyAIOptions = {
   apiKey: string;
   onTranscript?: (text: string) => void;
@@ -15,6 +17,8 @@ export function useAssemblyAI(options: UseAssemblyAIOptions) {
 
   const finalTranscriptRef = useRef('');
   const partialTranscriptRef = useRef('');
+  const formattedTurnsRef = useRef<Array<{ id: string | number | null; text: string }>>([]);
+  const currentTurnIdRef = useRef<string | number | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -37,8 +41,10 @@ export function useAssemblyAI(options: UseAssemblyAIOptions) {
 
   const connect = useCallback(async () => {
     return new Promise<void>((resolve, reject) => {
+      formattedTurnsRef.current = [];
       finalTranscriptRef.current = '';
       partialTranscriptRef.current = '';
+      currentTurnIdRef.current = null;
       setTranscript('');
 
       console.log('🔌 Starting AssemblyAI connection...');
@@ -54,7 +60,6 @@ export function useAssemblyAI(options: UseAssemblyAIOptions) {
           wsRef.current.binaryType = 'arraybuffer';
 
           wsRef.current.onopen = () => {
-            console.log('✅ AssemblyAI WebSocket OPEN');
             console.log('📊 WebSocket State:', wsRef.current?.readyState);
             setIsConnected(true);
             options.onConnectionChange?.(true);
@@ -96,72 +101,108 @@ export function useAssemblyAI(options: UseAssemblyAIOptions) {
               const data = JSON.parse(event.data);
 
               if (data.type === 'PartialTranscript') {
-                const partialTextRaw = data.text || '';
-                const partialText = partialTextRaw.replace(/\s+/g, ' ').trim();
-                // keeps only the delta beyond the saved history
-                if (partialText) {
-                  const finalSanitized = finalTranscriptRef.current.replace(/\s+/g, ' ').trim();
-                  let newPartial = partialText;
-                  if (
-                    finalSanitized &&
-                    partialText.toLowerCase().startsWith(finalSanitized.toLowerCase()) &&
-                    partialText.length >= finalSanitized.length
-                  ) {
-                    newPartial = partialText.slice(finalSanitized.length).replace(/\s+/g, ' ').trim();
-                  }
-                  partialTranscriptRef.current = newPartial;
-                  const combined = [finalTranscriptRef.current, partialTranscriptRef.current]
-                    .filter(Boolean)
-                    .join(' ')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                  setTranscript(combined);
+                const partialTextRaw = data.text ?? data.transcript ?? '';
+                const partialText = normalizeText(partialTextRaw);
+
+                if (!partialText) {
+                  partialTranscriptRef.current = '';
+                  setTranscript(finalTranscriptRef.current);
+                  return;
                 }
+
+                const turnIdentifier =
+                  data.turn_id ??
+                  data.turnId ??
+                  data.id ??
+                  data.turn_order ??
+                  data.turnOrder ??
+                  currentTurnIdRef.current ??
+                  `turn-${formattedTurnsRef.current.length}`;
+
+                currentTurnIdRef.current = turnIdentifier;
+
+                const historyText = normalizeText(
+                  formattedTurnsRef.current.map((turn) => turn.text).join(' ')
+                );
+                finalTranscriptRef.current = historyText;
+
+                if (
+                  historyText &&
+                  historyText.length >= partialText.length &&
+                  historyText.toLowerCase().startsWith(partialText.toLowerCase())
+                ) {
+                  partialTranscriptRef.current = '';
+                  setTranscript(historyText);
+                  return;
+                }
+
+                if (
+                  historyText &&
+                  partialText.toLowerCase().startsWith(historyText.toLowerCase())
+                ) {
+                  partialTranscriptRef.current = normalizeText(
+                    partialText.slice(historyText.length)
+                  );
+                } else {
+                  partialTranscriptRef.current = partialText;
+                }
+
+                const combined = normalizeText(
+                  [historyText, partialTranscriptRef.current].filter(Boolean).join(' ')
+                );
+                setTranscript(combined);
                 return;
               }
 
               if (data.type === 'Turn') {
-                const transcriptTextRaw = data.transcript || '';
-                const transcriptText = transcriptTextRaw.replace(/\s+/g, ' ').trim();
-                if (!transcriptText) {
+                const formattedRaw = data.transcript ?? '';
+                const formattedText = normalizeText(formattedRaw);
+
+                if (!formattedText) {
                   return;
                 }
-                if (data.turn_is_formatted) {
-                  const currentFinal = finalTranscriptRef.current.replace(/\s+/g, ' ').trim();
-                  let newFinal = transcriptText;
-                  if (currentFinal) {
-                    const currentLower = currentFinal.toLowerCase();
-                    const textLower = transcriptText.toLowerCase();
-                    if (textLower.startsWith(currentLower) && transcriptText.length >= currentFinal.length) {
-                      newFinal = transcriptText;
-                    } else if (!currentLower.includes(textLower)) {
-                      newFinal = [currentFinal, transcriptText].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-                    } else {
-                      newFinal = currentFinal;
-                    }
+
+                const turnIdentifier =
+                  data.turn_id ??
+                  data.turnId ??
+                  data.id ??
+                  data.turn_order ??
+                  data.turnOrder ??
+                  currentTurnIdRef.current ??
+                  `turn-${formattedTurnsRef.current.length}`;
+
+                const turns = formattedTurnsRef.current;
+                const lastIndex = turns.length - 1;
+                let targetIndex = turns.findIndex((turn) => turn.id === turnIdentifier);
+
+                if (targetIndex === -1 && lastIndex >= 0) {
+                  const lastText = turns[lastIndex].text;
+                  if (formattedText.toLowerCase().startsWith(lastText.toLowerCase())) {
+                    targetIndex = lastIndex;
                   }
-                  finalTranscriptRef.current = newFinal;
-                  partialTranscriptRef.current = '';
-                  setTranscript(newFinal);
-                  options.onTranscript?.(transcriptText);
-                } else {
-                  const currentFinal = finalTranscriptRef.current.replace(/\s+/g, ' ').trim();
-                  let newPartial = transcriptText;
-                  if (
-                    currentFinal &&
-                    transcriptText.toLowerCase().startsWith(currentFinal.toLowerCase()) &&
-                    transcriptText.length >= currentFinal.length
-                  ) {
-                    newPartial = transcriptText.slice(currentFinal.length).replace(/\s+/g, ' ').trim();
-                  }
-                  partialTranscriptRef.current = newPartial;
-                  const combined = [finalTranscriptRef.current, partialTranscriptRef.current]
-                    .filter(Boolean)
-                    .join(' ')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                  setTranscript(combined);
                 }
+
+                if (targetIndex >= 0) {
+                  turns[targetIndex] = {
+                    id: turns[targetIndex].id ?? turnIdentifier,
+                    text: formattedText,
+                  };
+                } else {
+                  turns.push({
+                    id: turnIdentifier,
+                    text: formattedText,
+                  });
+                }
+
+                currentTurnIdRef.current = null;
+                partialTranscriptRef.current = '';
+
+                finalTranscriptRef.current = normalizeText(
+                  turns.map((turn) => turn.text).join(' ')
+                );
+                setTranscript(finalTranscriptRef.current);
+                options.onTranscript?.(formattedText);
+                return;
               }
             } catch (err) {
               console.error('❌ Error parsing message:', err);
@@ -225,6 +266,8 @@ export function useAssemblyAI(options: UseAssemblyAIOptions) {
   const clearTranscript = useCallback(() => {
     finalTranscriptRef.current = '';
     partialTranscriptRef.current = '';
+    formattedTurnsRef.current = [];
+    currentTurnIdRef.current = null;
     setTranscript('');
   }, []);
 

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, systemPreferences, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, systemPreferences, Tray, Menu, nativeImage, NativeImage } from 'electron';
 import path from 'path';
 
 let mainWindow: BrowserWindow | null = null;
@@ -74,10 +74,9 @@ function createMainWindow() {
   });
 }
 
-// Create widget window
 function createWidgetWindow() {
   widgetWindow = new BrowserWindow({
-    width: 320,
+    width: 400,
     height: 450,
     frame: false,
     transparent: true,
@@ -188,6 +187,8 @@ function createTray() {
     path.join(__dirname, './assets/memo.png'),            // src/main.ts -> ./assets/memo.png
     path.join(__dirname, '../../src/assets/memo.png'),    // dist/main.js -> ../../src/assets/memo.png
     path.join(app.getAppPath(), 'src/assets/memo.png'),   // app path based
+    path.join(process.cwd(), 'src/assets/memo.png'),      // cwd when running npm start
+    path.join(process.cwd(), 'assets/memo.png'),
     // Production paths
     path.join(__dirname, './assets/memo.png'),            // dist/assets/memo.png
   ];
@@ -243,15 +244,36 @@ function createTray() {
   
   // Create tray with icon (or without if no path found)
   try {
+    let trayImage: NativeImage | null = null;
+
     if (iconPath) {
-      console.log(`🎙️ Creating tray icon from: ${iconPath}`);
+      const loaded = nativeImage.createFromPath(iconPath);
+      if (!loaded.isEmpty()) {
+        const size = isMac ? { width: 18, height: 18 } : { width: 24, height: 24 };
+        trayImage = loaded.resize({ ...size, quality: 'best' });
+        if (isMac) {
+          trayImage.setTemplateImage(true);
+        }
+      } else {
+        console.warn('⚠️ Loaded tray image is empty.');
+      }
+    }
+
+    if (trayImage) {
+      console.log('🎙️ Creating tray icon from native image');
+      tray = new Tray(trayImage);
+    } else if (iconPath) {
+      console.log(`🎙️ Creating tray icon directly from path: ${iconPath}`);
       tray = new Tray(iconPath);
     } else {
-      console.log(`🎙️ Creating tray without icon (system default)`);
-      // For macOS, even without an icon, tray should still work
-      // This will use a default icon
+      console.log('🎙️ Creating tray without icon (system default)');
       tray = new Tray(nativeImage.createEmpty());
     }
+
+    if (tray && isMac) {
+      tray.setIgnoreDoubleClickEvents(true);
+    }
+
     console.log('✅ Tray icon created successfully');
   } catch (error) {
     console.error('❌ Failed to create tray:', error);
