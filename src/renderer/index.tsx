@@ -1,15 +1,38 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import App from './App';
-import './styles/global.css';
+import React, { useEffect } from 'react';
+import ReactDOM from 'react-dom/client';
+import { HashRouter as Router, useRoutes, useLocation } from 'react-router-dom';
+import { routes } from './routes/routes';
+import './App.css';
 
-const container = document.getElementById('root');
-if (!container) throw new Error('Failed to find the root element');
+function AppContent() {
+  const location = useLocation();
+  const element = useRoutes(routes);
 
-const root = createRoot(container);
+  useEffect(() => {
+    if (location.pathname === '/widget') {
+      document.body.style.background = 'transparent';
+    } else {
+      document.body.style.background = '#f5f5f7';
+    }
+  }, [location]);
 
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+  return <>{element}</>;
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
+  );
+}
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}
