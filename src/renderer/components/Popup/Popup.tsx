@@ -75,25 +75,25 @@ export default function Popup({ onComplete }: PopupProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
-        <h1 className="text-2xl font-bold text-black mb-2">Welcome to Memo-AI</h1>
-        <p className="text-gray-600 mb-6">Allow access to microphone and camera for recording</p>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-[2px] flex items-center justify-center z-50 px-4">
+      <div className="w-full max-w-sm rounded-xl border border-black/5 bg-white/95 p-5 shadow-2xl shadow-black/20">
+        <h1 className="text-xl font-semibold text-black">Welcome to Memo-AI</h1>
+        <p className="mt-1 text-xs text-gray-600">Allow access to microphone and camera for recording.</p>
 
-        <div className="space-y-4 mb-6">
+        <div className="mt-4 space-y-3">
           {/* Microphone Permission */}
-          <div className="border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <Volume2 size={20} className="text-black" />
+          <div className="rounded-lg border border-gray-200/70 bg-white/70 p-3">
+            <div className="mb-2 flex items-center gap-3">
+              <Volume2 size={18} className="text-black" />
               <div className="flex-1">
-                <h3 className="font-semibold text-black">Microphone</h3>
-                <p className="text-xs text-gray-600">
+                <h3 className="text-sm font-semibold text-black">Microphone</h3>
+                <p className="text-[11px] text-gray-600">
                   {micPermission === 'granted' ? 'Permission granted' : 
                    micPermission === 'denied' ? 'Permission denied' : 
                    'Permission pending'}
                 </p>
               </div>
-              <div className={`w-3 h-3 rounded-full ${
+              <div className={`h-2.5 w-2.5 rounded-full ${
                 micPermission === 'granted' ? 'bg-green-500' :
                 micPermission === 'denied' ? 'bg-red-500' :
                 'bg-gray-300'
@@ -103,7 +103,7 @@ export default function Popup({ onComplete }: PopupProps) {
             {micPermission === 'prompt' && (
               <button
                 onClick={requestMicrophonePermission}
-                className="w-full px-4 py-2 bg-black text-white rounded-lg font-medium text-sm hover:bg-gray-900 transition"
+                className="w-full rounded-md bg-black px-3 py-2 text-[12px] font-medium text-white transition hover:bg-gray-900"
               >
                 Request Permission
               </button>
@@ -112,32 +112,32 @@ export default function Popup({ onComplete }: PopupProps) {
             {micPermission === 'denied' && (
               <button
                 onClick={handleOpenMicrophoneSettings}
-                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 transition"
+                className="w-full rounded-md bg-red-600 px-3 py-2 text-[12px] font-medium text-white transition hover:bg-red-700"
               >
                 Open Settings
               </button>
             )}
 
             {micPermission === 'granted' && (
-              <div className="text-sm text-green-600 font-medium">
+              <div className="text-[11px] font-medium text-green-600">
                 Ready to use
               </div>
             )}
           </div>
 
           {/* Camera Permission */}
-          <div className="border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <Camera size={20} className="text-black" />
+          <div className="rounded-lg border border-gray-200/70 bg-white/70 p-3">
+            <div className="mb-2 flex items-center gap-3">
+              <Camera size={18} className="text-black" />
               <div className="flex-1">
-                <h3 className="font-semibold text-black">Camera</h3>
-                <p className="text-xs text-gray-600">
+                <h3 className="text-sm font-semibold text-black">Camera</h3>
+                <p className="text-[11px] text-gray-600">
                   {cameraPermission === 'granted' ? 'Permission granted' : 
                    cameraPermission === 'denied' ? 'Permission denied' : 
                    'Permission pending'}
                 </p>
               </div>
-              <div className={`w-3 h-3 rounded-full ${
+              <div className={`h-2.5 w-2.5 rounded-full ${
                 cameraPermission === 'granted' ? 'bg-green-500' :
                 cameraPermission === 'denied' ? 'bg-red-500' :
                 'bg-gray-300'
@@ -147,7 +147,7 @@ export default function Popup({ onComplete }: PopupProps) {
             {cameraPermission === 'prompt' && (
               <button
                 onClick={requestCameraPermission}
-                className="w-full px-4 py-2 bg-black text-white rounded-lg font-medium text-sm hover:bg-gray-900 transition"
+                className="w-full rounded-md bg-black px-3 py-2 text-[12px] font-medium text-white transition hover:bg-gray-900"
               >
                 Request Permission
               </button>
@@ -156,14 +156,14 @@ export default function Popup({ onComplete }: PopupProps) {
             {cameraPermission === 'denied' && (
               <button
                 onClick={handleOpenCameraSettings}
-                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium text-sm hover:bg-red-700 transition"
+                className="w-full rounded-md bg-red-600 px-3 py-2 text-[12px] font-medium text-white transition hover:bg-red-700"
               >
                 Open Settings
               </button>
             )}
 
             {cameraPermission === 'granted' && (
-              <div className="text-sm text-green-600 font-medium">
+              <div className="text-[11px] font-medium text-green-600">
                 Ready to use
               </div>
             )}
@@ -172,13 +172,13 @@ export default function Popup({ onComplete }: PopupProps) {
 
         <button
           onClick={handleContinue}
-          className="w-full px-4 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-900 transition"
+          className="mt-4 w-full rounded-md bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-900"
         >
           Continue to Memo-AI
         </button>
 
-        <p className="text-xs text-gray-500 text-center mt-4">
-          You can change these permissions anytime in Settings
+        <p className="mt-3 text-[11px] text-center text-gray-500">
+          You can change these permissions anytime in Settings.
         </p>
       </div>
     </div>
