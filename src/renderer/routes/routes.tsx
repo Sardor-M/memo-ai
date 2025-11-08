@@ -1,6 +1,7 @@
 import { RouteObject } from 'react-router-dom';
 import React, { Suspense } from 'react';
 import Dashboard from '../pages/Dashboard';
+import History from '../pages/History';
 import Widget from '../components/Widget/Widget';
 
 const ComponentLoading = () => (
@@ -27,6 +28,10 @@ export const routes: RouteObject[] = [
   {
     path: '/',
     element: <Dashboard />,
+  },
+  {
+    path: '/history',
+    element: <History />,
   },
   {
     path: '/widget',

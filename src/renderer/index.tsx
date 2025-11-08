@@ -2,7 +2,9 @@ import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter as Router, useRoutes, useLocation } from 'react-router-dom';
 import { routes } from './routes/routes';
+import Sidebar from './components/Sidebar/Sidebar';
 import './App.css';
+import WindowControls from './components/WindowControls/WindowControls';
 
 function AppContent() {
   const location = useLocation();
@@ -16,7 +18,23 @@ function AppContent() {
     }
   }, [location]);
 
-  return <>{element}</>;
+  // Don't show sidebar and titlebar on widget page
+  const isWidget = location.pathname === '/widget';
+
+  return (
+    <div className="flex flex-col h-screen">
+      {/* Title Bar with Window Controls */}
+      {!isWidget && <WindowControls />}
+      
+      {/* Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {!isWidget && <Sidebar />}
+        <div className="flex-1 overflow-hidden">
+          {element}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function App() {
