@@ -23,7 +23,7 @@ export default function Sidebar() {
   const navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: <Home size={20} /> },
     { path: '/history', label: 'History', icon: <History size={20} /> },
-    { path: '/analytics', label: 'Analytics', icon: <BarChart3 size={20} /> },
+   // { path: '/analytics', label: 'Analytics', icon: <BarChart3 size={20} /> },
     { path: '/settings', label: 'Settings', icon: <Settings size={20} /> },
   ];
 
