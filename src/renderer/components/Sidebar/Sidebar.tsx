@@ -9,7 +9,7 @@ import {
   X
 } from 'lucide-react';
 
-interface NavItem {
+type NavItem = {
   path: string;
   label: string;
   icon: React.ReactNode;

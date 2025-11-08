@@ -12,12 +12,12 @@ export default function TitleBar({ title = 'Memo-AI' }: TitleBarProps) {
     setIsMacOS(userAgent.indexOf('mac') > -1);
   }, []);
 
-  const titleBarStyle: React.CSSProperties = {
+  const titleBarStyle: React.CSSProperties & { WebkitAppRegion: string } = {
     WebkitAppRegion: 'drag',
     userSelect: 'none',
     paddingLeft: isMacOS ? '80px' : '16px',
     paddingRight: '16px',
-  };
+  } as any;
 
   return (
     <div

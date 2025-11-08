@@ -3,23 +3,10 @@ import React, { Suspense } from 'react';
 import Dashboard from '../pages/Dashboard';
 import History from '../pages/History';
 import Widget from '../components/Widget/Widget';
-
-const ComponentLoading = () => (
-  <div style={{ 
-    display: 'flex', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    height: '100vh',
-    background: '#f5f5f7'
-  }}>
-    <div>
-      <h2>Loading...</h2>
-    </div>
-  </div>
-);
+import RecordingWidget from '../windows/RecordingWidget';
 
 const withSuspense = (Component: React.ComponentType<any>) => (
-  <Suspense fallback={<ComponentLoading />}>
+  <Suspense fallback={<Loading />}>
     <Component />
   </Suspense>
 );
@@ -36,6 +23,10 @@ export const routes: RouteObject[] = [
   {
     path: '/widget',
     element: <Widget />,
+  },
+  {
+    path: '/recording-widget',
+    element: <RecordingWidget />,
   },
   {
     path: '*',

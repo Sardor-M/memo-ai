@@ -1,0 +1,7 @@
+This file will be replaced with tray-icon.png
+
+To create the icon manually, use this base64 string and decode it:
+iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAUklEQVQ4T2NkGP7/PwMDA+MfBgYGBkZGRkYGRkZGBkZGRgYGBkYGRgZGBkYGRgZGBkZGBkZGBkYGRkZGBkYGRkZGBkYGRkYGRkZGRkZGRkYGRkYGJgYGJgYAUkERAX/f1bAAAAAASUVORK5CYII=
+
+Or use an image editor to create a 16x16 microphone icon and save it as PNG.
+

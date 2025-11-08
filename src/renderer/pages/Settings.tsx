@@ -1,24 +1,36 @@
-import { useState } from 'react';
-import { Save, Bell, Volume2, Mic } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, Bell, Volume2, Mic, Lock, CheckCircle2, AlertCircle, Camera } from 'lucide-react';
+import { useDeviceDetection } from '../hooks/useDeviceDetection';
 
-interface SettingsState {
+type SettingsState = {
   autoTranscribe: boolean;
   notifications: boolean;
   saveLocation: string;
   audioQuality: string;
   theme: string;
+  autoStartRecording: boolean;
 }
 
 export default function Settings() {
+  const { microphonePermission, cameraPermission, autoStartEnabled, setAutoStartEnabled, requestMicrophonePermission, requestCameraPermission } = useDeviceDetection();
   const [settings, setSettings] = useState<SettingsState>({
     autoTranscribe: true,
     notifications: true,
     saveLocation: '/Documents/MemoAI',
     audioQuality: 'high',
     theme: 'dark',
+    autoStartRecording: autoStartEnabled,
   });
 
   const [saved, setSaved] = useState(false);
+
+  // Sync auto-start setting
+  useEffect(() => {
+    setSettings(prev => ({
+      ...prev,
+      autoStartRecording: autoStartEnabled,
+    }));
+  }, [autoStartEnabled]);
 
   const handleToggle = (key: keyof SettingsState) => {
     setSettings(prev => ({
@@ -36,9 +48,11 @@ export default function Settings() {
 
   const handleSave = async () => {
     try {
-      await window.electronAPI.saveSettings?.(settings);
+      // Settings are auto-saved in browser localStorage
+      localStorage.setItem('memoai-settings', JSON.stringify(settings));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      console.log('✅ Settings saved');
     } catch (error) {
       console.error('Failed to save settings:', error);
     }
@@ -84,6 +98,122 @@ export default function Settings() {
 
       {/* Main Settings */}
       <div className="max-w-2xl space-y-6">
+        {/* Permissions Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Lock size={20} className="text-blue-600" />
+            Permissions
+          </h2>
+          <div className="space-y-4">
+            {/* Microphone Permission */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-start gap-3 flex-1">
+                <Mic size={20} className="text-gray-600 mt-1" />
+                <div>
+                  <p className="font-medium text-gray-900">Microphone Access</p>
+                  <p className="text-sm text-gray-600">
+                    {microphonePermission === 'granted' 
+                      ? 'Permission granted - microphone recording enabled'
+                      : microphonePermission === 'denied'
+                      ? 'Permission denied - enable in system settings'
+                      : 'Click to request permission'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {microphonePermission === 'granted' && (
+                  <CheckCircle2 size={24} className="text-green-600" />
+                )}
+                {microphonePermission === 'denied' && (
+                  <>
+                    <AlertCircle size={24} className="text-red-600" />
+                    <button
+                      onClick={() => window.electronAPI.openMicrophoneSettings?.()}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition text-sm"
+                    >
+                      Open Settings
+                    </button>
+                  </>
+                )}
+                {microphonePermission !== 'granted' && microphonePermission !== 'denied' && (
+                  <button
+                    onClick={requestMicrophonePermission}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+                  >
+                    Request Access
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Camera Permission */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-start gap-3 flex-1">
+                <Camera size={20} className="text-gray-600 mt-1" />
+                <div>
+                  <p className="font-medium text-gray-900">Camera Access</p>
+                  <p className="text-sm text-gray-600">
+                    {cameraPermission === 'granted'
+                      ? 'Permission granted - video recording enabled'
+                      : cameraPermission === 'denied'
+                      ? 'Permission denied - enable in system settings'
+                      : 'Click to request permission'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {cameraPermission === 'granted' && (
+                  <CheckCircle2 size={24} className="text-green-600" />
+                )}
+                {cameraPermission === 'denied' && (
+                  <>
+                    <AlertCircle size={24} className="text-red-600" />
+                    <button
+                      onClick={() => window.electronAPI.openCameraSettings?.()}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition text-sm"
+                    >
+                      Open Settings
+                    </button>
+                  </>
+                )}
+                {cameraPermission !== 'granted' && cameraPermission !== 'denied' && (
+                  <button
+                    onClick={requestCameraPermission}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+                  >
+                    Request Access
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Auto-Start Recording */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-start gap-3 flex-1">
+                <Mic size={20} className="text-gray-600 mt-1" />
+                <div>
+                  <p className="font-medium text-gray-900">Auto-Start Recording</p>
+                  <p className="text-sm text-gray-600">
+                    Automatically start recording when microphone or camera is enabled
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAutoStartEnabled(!autoStartEnabled)}
+                className={`relative inline-flex h-7 w-12 rounded-full transition-colors ${
+                  autoStartEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    autoStartEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Recording Settings */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">

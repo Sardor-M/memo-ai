@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Clock, Zap } from 'lucide-react';
 
-interface Stats {
+type Stats = {
   totalRecordings: number;
   totalDuration: number;
   avgDuration: number;

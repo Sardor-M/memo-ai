@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain, systemPreferences } from 'electron';
+import { app, BrowserWindow, ipcMain, systemPreferences, Tray, Menu, nativeImage } from 'electron';
 import path from 'path';
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let recordingWidgetWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 
 // Declare Vite dev server URL
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
@@ -14,11 +15,28 @@ declare const MAIN_WINDOW_VITE_PRELOAD_URL: string;
 async function requestPermissions() {
   if (process.platform === 'darwin') {
     try {
+      console.log('📱 Requesting macOS permissions...');
+      
+      // Request microphone permission
       const micStatus = await systemPreferences.askForMediaAccess('microphone');
-      console.log('Microphone permission:', micStatus);
+      console.log('🎤 Microphone permission:', micStatus ? 'Granted' : 'Denied');
+      
+      // Request camera permission
+      const cameraStatus = await systemPreferences.askForMediaAccess('camera');
+      console.log('📹 Camera permission:', cameraStatus ? 'Granted' : 'Denied');
+      
+      // Notify renderer of permission status
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('permissions-updated', {
+          microphone: micStatus,
+          camera: cameraStatus,
+        });
+      }
     } catch (error) {
-      console.error('Permission request failed:', error);
+      console.error('❌ Permission request failed:', error);
     }
+  } else if (process.platform === 'win32') {
+    console.log('💻 Windows detected - permissions handled by system');
   }
 }
 
@@ -105,8 +123,12 @@ function createRecordingWidgetWindow() {
   }
 
   recordingWidgetWindow = new BrowserWindow({
-    width: 380,
-    height: 500,
+    width: 450,
+    height: 700,
+    minWidth: 350,
+    minHeight: 500,
+    maxWidth: 800,
+    maxHeight: 1200,
     frame: false,
     transparent: false,
     backgroundColor: '#111827',
@@ -125,30 +147,182 @@ function createRecordingWidgetWindow() {
     titleBarStyle: 'hidden',
   });
 
-  // Load recording widget
+  // Load recording widget using the same entry point but with hash route to /recording-widget
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    recordingWidgetWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}recording-widget.html`);
+    recordingWidgetWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#/recording-widget`);
     recordingWidgetWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    recordingWidgetWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/recording-widget.html`));
+    recordingWidgetWindow.loadFile(
+      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+      { hash: '/recording-widget' }
+    );
   }
 
-  // Position in bottom-right corner
+  // Position in bottom-right corner with safe margins
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
   
-  recordingWidgetWindow.setPosition(width - 400, height - 520);
+  // Leave 20px margin from right and bottom
+  recordingWidgetWindow.setPosition(width - 420, height - 620);
 
   recordingWidgetWindow.on('closed', () => {
     recordingWidgetWindow = null;
   });
 }
 
+// Create Tray Icon
+function createTray() {
+  // Create tray icon - supports both macOS menu bar and Windows system tray
+  const fs = require('fs');
+  const isMac = process.platform === 'darwin';
+  
+  // Detect if running in development mode
+  const isDev = MAIN_WINDOW_VITE_DEV_SERVER_URL !== undefined;
+  console.log(`🔍 Environment: ${isDev ? 'DEVELOPMENT' : 'PRODUCTION'}`);
+  
+  // Try multiple paths to find memo.png
+  const potentialPaths = [
+    // Development paths (when running from src/)
+    path.join(__dirname, '../assets/memo.png'),           // src/main.ts -> ../assets/memo.png
+    path.join(__dirname, './assets/memo.png'),            // src/main.ts -> ./assets/memo.png
+    path.join(__dirname, '../../src/assets/memo.png'),    // dist/main.js -> ../../src/assets/memo.png
+    path.join(app.getAppPath(), 'src/assets/memo.png'),   // app path based
+    // Production paths
+    path.join(__dirname, './assets/memo.png'),            // dist/assets/memo.png
+  ];
+  
+  let iconPath: string | null = null;
+  
+  // Find the first path that exists
+  for (const tryPath of potentialPaths) {
+    if (fs.existsSync(tryPath)) {
+      iconPath = tryPath;
+      console.log(`✅ Found memo.png at: ${tryPath}`);
+      break;
+    }
+  }
+  
+  if (!iconPath) {
+    console.warn(`⚠️ memo.png not found in any location`);
+    console.warn(`Tried paths:`);
+    potentialPaths.forEach(p => console.warn(`  - ${p}`));
+    
+    // Create minimal PNG fallback
+    const trayPngPath = path.join(__dirname, '../assets/tray-icon.png');
+    const assetsDir = path.dirname(trayPngPath);
+    
+    // Create assets directory if needed
+    if (!fs.existsSync(assetsDir)) {
+      fs.mkdirSync(assetsDir, { recursive: true });
+    }
+    
+    if (!fs.existsSync(trayPngPath)) {
+      try {
+        // Create a minimal valid PNG (1x1 transparent pixel)
+        const minimalPng = Buffer.from([
+          0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+          0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+          0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+          0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+          0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+          0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82
+        ]);
+        fs.writeFileSync(trayPngPath, minimalPng);
+        console.log(`✅ Created fallback tray icon at: ${trayPngPath}`);
+        iconPath = trayPngPath;
+      } catch (error) {
+        console.warn('⚠️ Failed to create fallback tray icon:', error);
+        console.warn('⚠️ Tray will use default system icon');
+      }
+    } else {
+      iconPath = trayPngPath;
+      console.log(`✅ Using existing fallback PNG: ${trayPngPath}`);
+    }
+  }
+  
+  // Create tray with icon (or without if no path found)
+  try {
+    if (iconPath) {
+      console.log(`🎙️ Creating tray icon from: ${iconPath}`);
+      tray = new Tray(iconPath);
+    } else {
+      console.log(`🎙️ Creating tray without icon (system default)`);
+      // For macOS, even without an icon, tray should still work
+      // This will use a default icon
+      tray = new Tray(nativeImage.createEmpty());
+    }
+    console.log('✅ Tray icon created successfully');
+  } catch (error) {
+    console.error('❌ Failed to create tray:', error);
+    return;
+  }
+  
+  // Set tooltip
+  tray.setToolTip('Memo-AI - Click to open recording widget');
+  
+  // Build context menu
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open Recording Widget',
+      click: () => {
+        createRecordingWidgetWindow();
+      }
+    },
+    {
+      label: 'Show Main Window',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Settings',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+          mainWindow.webContents.send('navigate', '/settings');
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit Memo-AI',
+      click: () => {
+        app.quit();
+      }
+    }
+  ]);
+  
+  tray.setContextMenu(contextMenu);
+  
+  // Click on tray icon to toggle recording widget window
+  tray.on('click', () => {
+    if (recordingWidgetWindow && !recordingWidgetWindow.isDestroyed()) {
+      if (recordingWidgetWindow.isVisible()) {
+        recordingWidgetWindow.hide();
+      } else {
+        recordingWidgetWindow.show();
+        recordingWidgetWindow.focus();
+      }
+    } else {
+      createRecordingWidgetWindow();
+    }
+  });
+  
+  // Right-click shows context menu automatically on Windows/Linux
+  // On macOS, left-click shows context menu and right-click shows it too
+}
+
 // App lifecycle
 app.whenReady().then(async () => {
   await requestPermissions();
   createMainWindow();
+  createTray();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -219,8 +393,36 @@ ipcMain.handle('transcribe-audio', async (event, audioPath: string) => {
 });
 
 ipcMain.handle('save-to-docx', async (event, content: string, filename: string) => {
-  console.log('Save to docx called:', filename);
-  return { success: true, path: `/path/to/${filename}` };
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+
+    // Get the Documents folder or Desktop on macOS
+    const documentsPath = path.join(os.homedir(), 'Documents', 'Memo-AI');
+    
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(documentsPath)) {
+      fs.mkdirSync(documentsPath, { recursive: true });
+    }
+
+    // Save the file
+    const filepath = path.join(documentsPath, filename);
+    fs.writeFileSync(filepath, content, 'utf-8');
+
+    console.log('✅ Saved to:', filepath);
+    
+    // Open the file location in Finder (macOS)
+    if (process.platform === 'darwin') {
+      const { shell } = require('electron');
+      shell.showItemInFolder(filepath);
+    }
+
+    return { success: true, path: filepath };
+  } catch (error) {
+    console.error('❌ Failed to save:', error);
+    return { success: false, error: (error as Error).message };
+  }
 });
 
 ipcMain.handle('get-recordings', async () => {
@@ -269,5 +471,44 @@ ipcMain.handle('close-recording-widget', () => {
 ipcMain.on('recording-state-updated', (event, state) => {
   if (recordingWidgetWindow) {
     recordingWidgetWindow.webContents.send('recording-state-changed', state);
+  }
+});
+
+// System settings handlers for opening Privacy settings
+ipcMain.handle('open-microphone-settings', async () => {
+  try {
+    const { shell } = require('electron');
+    if (process.platform === 'darwin') {
+      // Open macOS System Settings to Privacy & Security > Microphone
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+      console.log('✅ Opening macOS Microphone Settings');
+    } else if (process.platform === 'win32') {
+      // Open Windows Settings to Privacy
+      shell.openExternal('ms-settings:privacy-microphone');
+      console.log('✅ Opening Windows Microphone Settings');
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Failed to open microphone settings:', error);
+    return { success: false, error: error };
+  }
+});
+
+ipcMain.handle('open-camera-settings', async () => {
+  try {
+    const { shell } = require('electron');
+    if (process.platform === 'darwin') {
+      // Open macOS System Settings to Privacy & Security > Camera
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Camera');
+      console.log('✅ Opening macOS Camera Settings');
+    } else if (process.platform === 'win32') {
+      // Open Windows Settings to Privacy
+      shell.openExternal('ms-settings:privacy-webcam');
+      console.log('✅ Opening Windows Camera Settings');
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Failed to open camera settings:', error);
+    return { success: false, error: error };
   }
 });

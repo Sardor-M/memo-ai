@@ -12,7 +12,7 @@ export default function Dashboard() {
 
   const loadRecordings = async () => {
     try {
-      const data = await window.electronAPI?.getRecordings?.();
+      const data = await window.electronAPI.getRecordings();
       setRecordings(data || []);
     } catch (error) {
       console.error('Failed to load recordings:', error);
@@ -21,12 +21,11 @@ export default function Dashboard() {
 
   const handleStartRecording = async () => {
     await startRecording();
-    setShowActiveWidget(true);
+    // Widget is now a separate window managed by main process
   };
 
   const handleStopRecording = async () => {
     await stopRecording();
-    setShowActiveWidget(false);
     loadRecordings();
   };
 

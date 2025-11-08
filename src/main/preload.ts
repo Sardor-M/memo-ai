@@ -31,4 +31,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRecordingStateChange: (callback: (state: any) => void) => {
     ipcRenderer.on('recording-state-changed', (_event, state) => callback(state));
   },
+
+  // System settings functions
+  openMicrophoneSettings: () => ipcRenderer.invoke('open-microphone-settings'),
+  openCameraSettings: () => ipcRenderer.invoke('open-camera-settings'),
 });
