@@ -1,0 +1,42 @@
+import { RouteObject } from 'react-router-dom';
+import React, { Suspense } from 'react';
+import Dashboard from '../pages/Dashboard';
+import Widget from '../components/Widget/Widget';
+
+const ComponentLoading = () => (
+  <div style={{ 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    height: '100vh',
+    background: '#f5f5f7'
+  }}>
+    <div>
+      <h2>Loading...</h2>
+    </div>
+  </div>
+);
+
+const withSuspense = (Component: React.ComponentType<any>) => (
+  <Suspense fallback={<ComponentLoading />}>
+    <Component />
+  </Suspense>
+);
+
+export const routes: RouteObject[] = [
+  {
+    path: '/',
+    element: <Dashboard />,
+  },
+  {
+    path: '/widget',
+    element: <Widget />,
+  },
+  {
+    path: '*',
+    element: <div style={{ padding: '40px', textAlign: 'center' }}>
+      <h1>404 - Page Not Found</h1>
+    </div>,
+  },
+];
+

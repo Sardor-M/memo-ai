@@ -3,28 +3,24 @@ import { Navigate, useLocation } from 'react-router-dom';
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
-  redirectTo?: string;
+  requireAuth?: boolean;
 };
 
 /**
- * ProtectedRoute - Component to restrict access to protected routes
- * This component checks if the user is authenticated.
- * If not authenticated, it redirects the user to the home page.
- * @param {ProtectedRouteProps} props - Props for the ProtectedRoute component
+ * ProtectedRoute - Component to protect routes based on authentication
+ * For Electron app, this can be extended with proper auth checks
  */
 export default function ProtectedRoute({ 
   children, 
-  redirectTo = '/' 
+  requireAuth = true 
 }: ProtectedRouteProps) {
   const location = useLocation();
-  
-  // TODO: Implement authentication check
-  // Replace with actual authentication logic
-  const isAuthenticated = true; // For now, allow all access
 
-  if (!isAuthenticated) {
-    console.warn('Access denied, redirecting to:', redirectTo);
-    return <Navigate to={redirectTo} state={{ from: location.pathname }} replace />;
+  // TODO: Add your authentication check here
+  const isAuthenticated = true; // Placeholder
+
+  if (requireAuth && !isAuthenticated) {
+    return <Navigate to="/" state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
