@@ -8,10 +8,7 @@ interface RecordingResult {
   audioPath?: string;
 }
 
-interface TranscriptionResult {
-  success: boolean;
-  transcript?: string;
-}
+
 
 interface SaveResult {
   success: boolean;
@@ -20,10 +17,13 @@ interface SaveResult {
 interface ElectronAPI {
   startRecording: () => Promise<RecordingResult>;
   stopRecording: () => Promise<RecordingResult>;
-  transcribeAudio: (audioPath: string) => Promise<TranscriptionResult>;
+  transcribeBuffer: (buffer:Buffer) => Promise<TranscriptionResult>;
+ // transcribeAudio: (audioPath: string) => Promise<TranscriptionResult>;
   saveToDocx: (content: string, filename: string) => Promise<SaveResult>;
   hideWidget: () => void;
   onRecordingProgress: (callback: (data: RecordingData) => void) => void;
+
+  saveAudioFile: (buffer: Buffer) => Promise<string>;
 }
 
 declare global {

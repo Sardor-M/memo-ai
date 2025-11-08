@@ -1,6 +1,15 @@
 import { app, BrowserWindow, ipcMain, systemPreferences } from 'electron';
 import path from 'path';
 
+import fs from "fs/promises";
+import os from "os";
+
+import whisper from 'whisper-node';
+import ffmpeg from 'ffmpeg-static';
+
+
+//const whisper = require('whisper-node');
+
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let recordingWidgetWindow: BrowserWindow | null = null;
@@ -213,10 +222,14 @@ ipcMain.handle('stop-recording', async () => {
   return { success: true, audioPath: '/path/to/audio.wav' };
 });
 
+/*
+
 ipcMain.handle('transcribe-audio', async (event, audioPath: string) => {
   console.log('Transcribe audio called:', audioPath);
   return { success: true, transcript: 'Sample transcript text' };
 });
+
+*/
 
 ipcMain.handle('save-to-docx', async (event, content: string, filename: string) => {
   console.log('Save to docx called:', filename);
@@ -263,6 +276,38 @@ ipcMain.handle('close-recording-widget', () => {
     recordingWidgetWindow.close();
     recordingWidgetWindow = null;
   }
+});
+
+
+
+
+ipcMain.handle("transcribe-buffer", async (_, buffer: Buffer) => {
+  try {
+    const tempDir = app.getPath("temp");
+    const audioPath = path.join(tempDir, `recording_${Date.now()}.webm`);
+    await fs.writeFile(audioPath, Buffer.from(buffer));
+    console.log("Audio saved:", audioPath);
+
+    const result = await whisper(audioPath, {
+      modelName: "base",
+      whisperOptions: { language: "en" },
+     // ffmpegPath: ffmpeg,
+    });
+
+    console.log("Whisper result:", result.text);
+    await fs.unlink(audioPath);
+    return result.text;
+  } catch (err) {
+    console.error("Whisper transcription error:", err);
+    throw err;
+  }
+});
+
+
+ipcMain.handle("save-audio-file", async (_, buffer: Buffer) => {
+  const tempPath = path.join(os.tmpdir(), `audio_${Date.now()}.wav`);
+  await fs.writeFile(tempPath, buffer);
+  return tempPath;
 });
 
 // Sync recording state with widget

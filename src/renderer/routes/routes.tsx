@@ -3,6 +3,7 @@ import React, { Suspense } from 'react';
 import Dashboard from '../pages/Dashboard';
 import History from '../pages/History';
 import Widget from '../components/Widget/Widget';
+import Analytics from '../pages/Analytics';
 
 const ComponentLoading = () => (
   <div style={{ 
@@ -36,6 +37,11 @@ export const routes: RouteObject[] = [
   {
     path: '/widget',
     element: <Widget />,
+  },
+
+  {
+    path: '/analytics',
+    element: <Analytics/>,
   },
   {
     path: '*',

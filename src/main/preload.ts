@@ -9,8 +9,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Recording functions
   startRecording: () => ipcRenderer.invoke('start-recording'),
   stopRecording: () => ipcRenderer.invoke('stop-recording'),
-  transcribeAudio: (audioPath: string) =>
-    ipcRenderer.invoke('transcribe-audio', audioPath),
+
+   transcribeBuffer: (buffer: Buffer) => {
+    console.log("Transcribe buffer called");
+    return ipcRenderer.invoke("transcribe-buffer", buffer);
+  },
+
+  saveAudioFile: (buffer: Buffer) => ipcRenderer.invoke("save-audio-file", buffer),
   saveToDocx: (content: string, filename: string) =>
     ipcRenderer.invoke('save-to-docx', content, filename),
 
@@ -27,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRecordings: () => ipcRenderer.invoke('get-recordings'),
   getAppPath: () => ipcRenderer.invoke('get-app-path'),
 
+ 
   // Widget state sync
   onRecordingStateChange: (callback: (state: any) => void) => {
     ipcRenderer.on('recording-state-changed', (_event, state) => callback(state));
