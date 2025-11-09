@@ -15,6 +15,8 @@ interface TranscriptionResult {
 
 interface SaveResult {
   success: boolean;
+  path?: string | null;
+  error?: string;
 }
 
 interface ElectronAPI {
@@ -40,9 +42,34 @@ interface ElectronAPI {
   maximizeWindow?: () => Promise<void>;
   closeWindow?: () => Promise<void>;
   
-  // Utility
   getRecordings: () => Promise<any[]>;
   getAppPath: () => Promise<string>;
+  selectDirectory: () => Promise<{ canceled: boolean; path: string | null }>;
+  fetchCalendarEvents: () => Promise<{
+    success: boolean;
+    events?: {
+      id: string;
+      calendar?: string;
+      title: string;
+      start: string;
+      end: string;
+      location?: string;
+      notes?: string;
+      summary?: string;
+    }[];
+    error?: string;
+  }>;
+  createCalendarEvent: (event: {
+    title: string;
+    start: string;
+    end: string;
+    location?: string;
+  }) => Promise<{ success: boolean; error?: string; path?: string }>;
+  summarizeWithOpenAI: (payload: {
+    transcript: string;
+    notes?: string;
+    summaryType?: 'bullets' | 'headline' | 'paragraph';
+  }) => Promise<{ success: boolean; summary?: string; error?: string }>;
 
   // System settings
   openMicrophoneSettings: () => Promise<{ success: boolean }>;

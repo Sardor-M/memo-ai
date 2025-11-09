@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import  { useState, useEffect } from 'react';
 import type { RecordingData } from '../../../types/electron';
 import './Widget.css';
 
@@ -8,13 +8,26 @@ export default function Widget() {
   const [status, setStatus] = useState<'idle' | 'recording' | 'processing'>('idle');
 
   useEffect(() => {
-    window.electronAPI.onRecordingProgress((data: RecordingData) => {
+    if (typeof window.electronAPI?.onRecordingProgress !== 'function') {
+      console.warn('onRecordingProgress API is not available; recording widget will not show live updates.');
+      return;
+    }
+
+    const handler = (data: RecordingData) => {
       setDuration(data.duration);
       if (data.status === 'recording') {
         setIsRecording(true);
         setStatus('recording');
+      } else if (data.status === 'idle') {
+        setIsRecording(false);
+        setStatus('idle');
       }
-    });
+    };
+
+    window.electronAPI.onRecordingProgress(handler);
+
+    return () => {
+    };
   }, []);
 
   const handleStartRecording = async () => {

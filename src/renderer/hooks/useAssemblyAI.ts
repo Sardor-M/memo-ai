@@ -47,12 +47,8 @@ export function useAssemblyAI(options: UseAssemblyAIOptions) {
       currentTurnIdRef.current = null;
       setTranscript('');
 
-      console.log('🔌 Starting AssemblyAI connection...');
-      console.log('📍 API Endpoint:', API_ENDPOINT);
-      
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then((stream) => {
-          console.log('✅ Microphone access granted');
           streamRef.current = stream;
           
           // Create WebSocket connection
@@ -60,7 +56,6 @@ export function useAssemblyAI(options: UseAssemblyAIOptions) {
           wsRef.current.binaryType = 'arraybuffer';
 
           wsRef.current.onopen = () => {
-            console.log('📊 WebSocket State:', wsRef.current?.readyState);
             setIsConnected(true);
             options.onConnectionChange?.(true);
 
@@ -85,10 +80,8 @@ export function useAssemblyAI(options: UseAssemblyAIOptions) {
                   const s = Math.max(-1, Math.min(1, audioData[i]));
                   pcm16Data[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
                 }
-                console.log('📤 Sending audio chunk:', pcm16Data.buffer.byteLength, 'bytes');
                 wsRef.current.send(pcm16Data.buffer);
               } else {
-                console.log('⚠️ WebSocket not ready. State:', wsRef.current?.readyState);
               }
             };
 

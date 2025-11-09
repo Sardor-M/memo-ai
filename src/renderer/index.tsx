@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter as Router, useRoutes, useLocation } from 'react-router-dom';
 import { routes } from './routes/routes';
-import Sidebar from './components/Sidebar/Sidebar';
+import { AppSidebar } from './components/AppSidebar';
 import TitleBar from './components/TitleBar/TitleBar';
 import Popup from './components/Popup/Popup';
+import { SidebarProvider, SidebarTrigger } from './components/ui/sidebar';
 import './App.css';
 
 function AppContent() {
@@ -19,28 +20,38 @@ function AppContent() {
     }
   }, [location]);
 
-  // Don't show sidebar and titlebar on widget pages
   const isWidget = location.pathname === '/widget' || location.pathname === '/recording-widget';
 
+  if (isWidget) {
+    return (
+      <div className="flex flex-col h-screen">
+        <div className="flex-1 overflow-auto">{element}</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-screen">
-      {/* Title Bar with Window Controls */}
-      {!isWidget && <TitleBar />}
-      
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {!isWidget && <Sidebar />}
-        <div className="flex-1 overflow-auto">
-          {element}
+    <SidebarProvider>
+      <div className="flex flex-col h-screen">
+        <TitleBar />
+        <div className="flex flex-1 overflow-hidden">
+          <AppSidebar />
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="border-b border-black/20 bg-white/70 py-3 backdrop-blur md:hidden">
+              <div className="px-3">
+                <SidebarTrigger variant="ghost" size="icon" />
+              </div>
+            </div>
+            <main className="flex-1 overflow-auto bg-gray-100">{element}</main>
+          </div>
         </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }
 
 function App() {
   const [showPopup, setShowPopup] = useState(() => {
-    // Check if first time launch
     const hasSeenPopup = localStorage.getItem('memo-ai-popup-shown');
     return !hasSeenPopup;
   });

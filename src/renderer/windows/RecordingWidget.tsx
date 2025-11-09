@@ -1,8 +1,128 @@
-import { useState, useEffect, useRef } from 'react';
-import { Volume2, Pause, Play, Save, Mic, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, } from 'react';
+import { Volume2, Pause, Play, Save, Mic, AlertCircle, Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { useAssemblyAI } from '../hooks/useAssemblyAI';
+import { addHistoryEntry } from '../utils/history';
+import { addCalendarEventEntry } from '../utils/calendar';
 
-const ASSEMBLY_AI_KEY = import.meta.env.VITE_ASSEMBLY_AI_KEY || 'a483a32d28e34ffa8ffc44bac0e13362';
+type SuggestedEvent = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  context: string;
+};
+
+const MONTH_MAP: Record<string, string> = {
+  january: 'January',
+  jan: 'January',
+  february: 'February',
+  feb: 'February',
+  march: 'March',
+  mar: 'March',
+  april: 'April',
+  apr: 'April',
+  may: 'May',
+  june: 'June',
+  jun: 'June',
+  july: 'July',
+  jul: 'July',
+  august: 'August',
+  aug: 'August',
+  september: 'September',
+  sept: 'September',
+  sep: 'September',
+  october: 'October',
+  oct: 'October',
+  november: 'November',
+  nov: 'November',
+  december: 'December',
+  dec: 'December',
+};
+
+const startFormatter = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+const endFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+function capitalizeSentence(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+function formatEventRange(startISO: string, endISO: string) {
+  const startDate = new Date(startISO);
+  const endDate = new Date(endISO);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return startISO;
+  }
+  const sameDay = startDate.toDateString() === endDate.toDateString();
+  if (sameDay) {
+    return `${startFormatter.format(startDate)} – ${endFormatter.format(endDate)}`;
+  }
+  return `${startFormatter.format(startDate)} → ${startFormatter.format(endDate)}`;
+}
+
+function extractEventsFromTranscript(transcript: string): SuggestedEvent[] {
+  if (!transcript) return [];
+  const suggestions: SuggestedEvent[] = [];
+  const regex =
+    /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.?[\s]+(\d{1,2})(?:,?\s*(\d{4}))?(?:\s+(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)?))?/gi;
+  const now = new Date();
+
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(transcript)) && suggestions.length < 4) {
+    const rawMonth = match[1].toLowerCase().replace('.', '');
+    const monthName = MONTH_MAP[rawMonth];
+    if (!monthName) continue;
+
+    const day = parseInt(match[2], 10);
+    if (!Number.isFinite(day)) continue;
+
+    const rawYear = match[3];
+    let year = rawYear ? parseInt(rawYear, 10) : now.getFullYear();
+    if (!Number.isFinite(year)) {
+      year = now.getFullYear();
+    }
+
+    const timePortion = match[4] ? match[4].trim().replace(/\s+/g, ' ') : '9:00 AM';
+    let startCandidate = new Date(`${monthName} ${day} ${year} ${timePortion}`);
+    if (Number.isNaN(startCandidate.getTime())) {
+      startCandidate = new Date(`${monthName} ${day}, ${year}`);
+      if (Number.isNaN(startCandidate.getTime())) continue;
+    }
+
+    if (!rawYear && startCandidate.getTime() < now.getTime() - 60 * 60 * 1000) {
+      startCandidate.setFullYear(year + 1);
+    }
+
+    const endCandidate = new Date(startCandidate.getTime() + 60 * 60 * 1000);
+    const contextStart = Math.max(0, match.index - 60);
+    const contextEnd = Math.min(transcript.length, match.index + match[0].length + 60);
+    const rawContext = transcript.slice(contextStart, contextEnd).trim();
+    const contextLine = rawContext.split(/[\n\.]/)[0] ?? match[0];
+    const title = capitalizeSentence(contextLine.length > 0 ? contextLine : `Event on ${monthName} ${day}`);
+
+    suggestions.push({
+      id: `suggest-${match.index}-${startCandidate.getTime()}`,
+      title,
+      start: startCandidate.toISOString(),
+      end: endCandidate.toISOString(),
+      context: rawContext,
+    });
+  }
+
+  return suggestions;
+}
+
+const ASSEMBLY_AI_KEY = import.meta.env.VITE_ASSEMBLY_AI_KEY ?? '';
 
 export default function RecordingWidget() {
   const [duration, setDuration] = useState(0);
@@ -13,6 +133,13 @@ export default function RecordingWidget() {
   const [waveformBars, setWaveformBars] = useState(Array(60).fill(0));
   const [isSaving, setIsSaving] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
+  const [suggestedEvents, setSuggestedEvents] = useState<SuggestedEvent[]>([]);
+  const [creatingEventId, setCreatingEventId] = useState<string | null>(null);
+  const [createdEventIds, setCreatedEventIds] = useState<string[]>([]);
+  const canCreateCalendarEvent = Boolean(window.electronAPI?.createCalendarEvent);
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+  const [summaryStatus, setSummaryStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const {
     isConnected: isAIConnected,
@@ -24,14 +151,11 @@ export default function RecordingWidget() {
     clearError: clearAIError,
   } = useAssemblyAI({
     apiKey: ASSEMBLY_AI_KEY,
-    onTranscript: (text) => console.log('Transcript:', text),
     onError: (error) => console.error('AI Error:', error),
-    onConnectionChange: (connected) => console.log('Connected:', connected),
   });
 
   useEffect(() => {
     window.electronAPI?.onRecordingStateChange?.((state: any) => {
-      console.log('Recording state changed:', state);
       setIsRecording(state.isRecording);
       if (!state.isRecording) {
         setDuration(0);
@@ -39,6 +163,18 @@ export default function RecordingWidget() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!transcript) {
+      setSuggestedEvents([]);
+      setCreatedEventIds([]);
+      setSummaryText(null);
+      setSummaryStatus('idle');
+      setSummaryError(null);
+      return;
+    }
+    setSuggestedEvents(extractEventsFromTranscript(transcript));
+  }, [transcript]);
 
   useEffect(() => {
     if (!isRecording || isPaused) return;
@@ -78,8 +214,15 @@ export default function RecordingWidget() {
 
   const handleStart = async () => {
     try {
+      if (!ASSEMBLY_AI_KEY) {
+        alert('AssemblyAI API key is not configured. Add VITE_ASSEMBLY_AI_KEY to your environment to enable live transcription.');
+        return;
+      }
       clearAITranscript();
       clearAIError();
+      setSummaryText(null);
+      setSummaryStatus('idle');
+      setSummaryError(null);
       
       await connectAI();
       await window.electronAPI?.startRecording?.();
@@ -106,15 +249,130 @@ export default function RecordingWidget() {
     setIsPaused(!isPaused);
   };
 
+  const handleCreateCalendarEvent = async (event: SuggestedEvent) => {
+    if (!canCreateCalendarEvent) {
+      alert('Calendar event creation is only available on macOS builds.');
+      return;
+    }
+
+    try {
+      setCreatingEventId(event.id);
+      const response = await window.electronAPI?.createCalendarEvent?.({
+        title: event.title,
+        start: event.start,
+        end: event.end,
+        location: '',
+      });
+
+      if (!response || !response.success) {
+        alert(response?.error ?? 'Memo-AI could not create the calendar event.');
+        return;
+      }
+
+      addCalendarEventEntry({
+        id: `memo-ai-${event.id}`,
+        title: event.title,
+        start: event.start,
+        end: event.end,
+        location: '',
+        summary: event.context,
+      });
+
+      setCreatedEventIds(prev => (prev.includes(event.id) ? prev : [...prev, event.id]));
+      alert('Event added to Calendar. Review the Calendar app to confirm.');
+    } catch (error) {
+      console.error('Failed to create calendar event:', error);
+      alert('Memo-AI could not create the calendar event.');
+    } finally {
+      setCreatingEventId(null);
+    }
+  };
+
+  const handleSummarizeTranscript = async () => {
+    if (!transcript) {
+      return;
+    }
+  
+    try {
+      setSummaryStatus('loading');
+      setSummaryError(null);
+      
+      const result = await window.electronAPI.summarizeWithOpenAI({
+        transcript,
+        notes,
+        summaryType: 'bullets',
+      });
+  
+      if (!result || !result.success) {
+        throw new Error(result?.error || 'Failed to generate summary.');
+      }
+  
+      if (!result.summary || result.summary.trim() === '') {
+        throw new Error('OpenAI returned an empty summary. Please try again.');
+      }
+  
+      setSummaryText(result.summary);
+      setSummaryStatus('ready');
+    } catch (error) {
+      console.error('Failed to summarize transcript:', error);
+      setSummaryStatus('error');
+      setSummaryError(error instanceof Error ? error.message : 'Unknown error while summarizing.');
+    }
+  };
+
+  const handleDownloadSummary = () => {
+    if (!summaryText) return;
+    const blob = new Blob([summaryText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `memo-summary-${Date.now()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleSave = async () => {
     try {
       setIsSaving(true);
       
-      const timestamp = new Date().toLocaleString();
-      const content = `=== Memo-AI Recording ===\nDate: ${timestamp}\nDuration: ${formatTime(duration)}\n\n--- Transcript ---\n${transcript}\n\n--- Notes ---\n${notes}`;
-      
-      await window.electronAPI?.saveToDocx?.(content, `memo-${Date.now()}.txt`);
-      
+      const now = new Date();
+      const docName = `memo-${now.getTime()}.txt`;
+      const humanTimestamp = now.toLocaleString();
+      const formattedDuration = formatTime(duration);
+      const cleanTranscript = transcript.trim();
+      const cleanNotes = notes.trim();
+
+      const content = `=== Memo-AI Recording ===\nDate: ${humanTimestamp}\nDuration: ${formattedDuration}\n\n--- Transcript ---\n${cleanTranscript || 'No transcript captured.'}\n\n--- Notes ---\n${cleanNotes || 'No notes captured.'}`;
+      const saveResult = await window.electronAPI?.saveToDocx?.(content, docName);
+      if (saveResult && saveResult.success === false) {
+        throw new Error(saveResult.error ?? 'Unable to save recording');
+      }
+
+      const baseTitleSource = cleanNotes || cleanTranscript;
+      const title = baseTitleSource
+        ? baseTitleSource.split(/\r?\n/)[0].slice(0, 80)
+        : `Recording ${humanTimestamp}`;
+      const summarySource = cleanTranscript || cleanNotes;
+      const summary = summarySource
+        ? (() => {
+            const condensed = summarySource.replace(/\s+/g, ' ').trim();
+            return condensed.length > 200 ? `${condensed.slice(0, 200)}…` : condensed;
+          })()
+        : 'No transcript available for this session.';
+
+      addHistoryEntry({
+        id: `history-${now.getTime()}`,
+        title,
+        createdAt: now.toISOString(),
+        duration: formattedDuration,
+        summary,
+        transcript: cleanTranscript,
+        notes: cleanNotes,
+        filePath: saveResult?.path ?? (saveResult?.success ? docName : null),
+      });
+
       clearAITranscript();
       setNotes('');
       setDuration(0);
@@ -128,22 +386,23 @@ export default function RecordingWidget() {
     }
   };
 
+  const summaryListItems = useMemo(() => {
+    if (!summaryText) return [];
+    return summaryText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+  }, [summaryText]);
+
   return (
     <div 
       ref={dragRef}
       className="w-full h-full bg-gray-100 flex flex-col overflow-hidden select-none shadow-2xl rounded-lg border border-gray-200"
     >
-      {/* Header - DRAGGABLE */}
-      <div 
-        className="flex items-center justify-between p-4 bg-black border-b border-gray-900/60"
+      <div
+        className="bg-gray-300 border-b border-gray-300 py-4"
         style={{ WebkitAppRegion: 'drag' } as any}
-      >
-        <div className="flex items-center gap-2">
-          <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`} />
-          <h2 className="text-sm font-bold text-white">Memo-AI</h2>
-        </div>
-        <div className="px-1" />
-      </div>
+      />
 
       {/* Tabs */}
       <div className="flex items-center justify-between gap-4 p-3 border-b border-gray-200 bg-gray-100">
@@ -157,7 +416,7 @@ export default function RecordingWidget() {
           }`}
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
-          📝 Notes
+          Notes
           </button>
           <button
           onClick={() => setActiveTab('transcript')}
@@ -168,7 +427,7 @@ export default function RecordingWidget() {
           }`}
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
-          🎙️ Transcript
+          Transcript
           </button>
         </div>
         <div className="flex items-center gap-3 text-xs" style={{ WebkitAppRegion: 'no-drag' } as any}>
@@ -234,6 +493,115 @@ export default function RecordingWidget() {
                   )}
                 </div>
               </div>
+
+              {suggestedEvents.length > 0 && (
+                <div className="space-y-2 rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+                    <CalendarIcon size={14} />
+                    Suggested calendar events
+                  </div>
+                  {suggestedEvents.map((event) => {
+                    const created = createdEventIds.includes(event.id);
+                    const loading = creatingEventId === event.id;
+                    return (
+                      <div
+                        key={event.id}
+                        className="flex flex-col gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-gray-900">{event.title}</p>
+                          <p className="flex items-center gap-1 text-gray-600">
+                            <Clock size={12} />
+                            {formatEventRange(event.start, event.end)}
+                          </p>
+                          {event.context && (
+                            <p className="text-[11px] text-gray-500 italic">
+                              “{event.context.length > 140 ? `${event.context.slice(0, 140)}…` : event.context}”
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleCreateCalendarEvent(event)}
+                          disabled={loading || created || !canCreateCalendarEvent}
+                          className={`inline-flex items-center justify-center rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+                            created
+                              ? 'border-emerald-400 bg-white text-emerald-600 cursor-default'
+                              : loading || !canCreateCalendarEvent
+                              ? 'border-gray-200 bg-gray-200 text-gray-500 cursor-not-allowed'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-gray-500 hover:text-gray-900'
+                          }`}
+                          style={{ WebkitAppRegion: 'no-drag' } as any}
+                        >
+                          {created ? 'Added' : loading ? 'Adding…' : !canCreateCalendarEvent ? 'macOS only' : 'Create event'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {transcript && (
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="flex items-center justify-between gap-2 text-xs font-semibold text-gray-700">
+                    <span>AI summary</span>
+                    {summaryStatus === 'ready' && summaryText && (
+                      <button
+                        onClick={handleDownloadSummary}
+                        className="rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 transition hover:border-gray-500 hover:text-gray-900"
+                        style={{ WebkitAppRegion: 'no-drag' } as any}
+                      >
+                        Download summary
+                      </button>
+                    )}
+                  </div>
+
+                  {summaryStatus === 'loading' && (
+                    <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                      <div className="h-2 w-2 animate-ping rounded-full bg-gray-500" />
+                      Generating summary…
+                    </div>
+                  )}
+
+                  {summaryStatus === 'error' && summaryError && (
+                    <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                      <AlertCircle size={14} className="text-red-600" />
+                      {summaryError}
+                    </div>
+                  )}
+
+                  {summaryStatus === 'ready' && summaryListItems.length > 0 && (
+                    <div className="space-y-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+                        Summary highlights
+                      </h4>
+                      <ul className="list-disc space-y-1 pl-4">
+                        {summaryListItems.map((line, index) => (
+                          <li key={`${line}-${index}`} className="leading-snug">
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {summaryStatus === 'ready' && summaryListItems.length === 0 && (
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                      No summary details returned. Try generating again once the transcript fills in.
+                    </div>
+                  )}
+
+                  {summaryStatus === 'idle' && (
+                    <button
+                      onClick={handleSummarizeTranscript}
+                      disabled={!transcript}
+                      className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 transition hover:border-gray-500 hover:text-gray-900 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+                      style={{ WebkitAppRegion: 'no-drag' } as any}
+                    >
+                      Summarize transcript
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
